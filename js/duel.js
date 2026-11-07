@@ -40,10 +40,10 @@ function duelStart(kind, code) {
     DUEL.peer.on('connection', c => { if (DUEL.T) { c.close(); return; } c.on('open', () => { clearTimeout(DUEL.lobbyT); DUEL.T = wrapConn(c); duelBind(); duelStatus('對手來了！'); }); });
   }).catch(e => { duelQuit((e && e.message) || '連線失敗'); });
 }
-function duelBind() { const T = DUEL.T; T.onmsg = duelMsg; T.onclose = () => { if (DUEL) duelQuit(DUEL.phase === 'over' ? null : '對手離線了。'); }; DUEL.pingT = setInterval(() => DUEL && DUEL.T && DUEL.T.send({ t: 'ping', at: Date.now() }), 2000); }
+function duelBind() { const T = DUEL.T; T.onmsg = duelMsg; T.onclose = () => { if (DUEL) duelQuit(DUEL.phase === 'over' ? null : '對手離線了。'); }; DUEL.pingT = setInterval(() => DUEL && DUEL.T && DUEL.T.send({ t: 'ping', at: Date.now() }), 2000); DUEL.clockT = setInterval(duelClock, 250); }
 function duelMe() { return { name: S.name, origin: S.origin, gender: S.gender, hair: S.hair || 0, hairCol: S.hairCol, clothCol: S.clothCol, main: S.main, realm: realmOf(power()), karma: S.karma, mature: !!S.ch2, v: VERSION }; }
 function duelHello() { DUEL.T.send({ t: 'hello', me: duelMe(), mode: DUEL.mode }); }
-function duelQuit(msg) { const D = DUEL; if (!D) return; DUEL = null; clearInterval(D.pingT); clearTimeout(D.lobbyT); clearTimeout(D.nextT); try { D.T && D.T.send({ t: 'bye' }); D.T && D.T.close(); } catch (e) { } try { D.peer && D.peer.destroy(); } catch (e) { }
+function duelQuit(msg) { const D = DUEL; if (!D) return; DUEL = null; clearInterval(D.pingT); clearInterval(D.clockT); clearTimeout(D.lobbyT); clearTimeout(D.nextT); try { D.T && D.T.send({ t: 'bye' }); D.T && D.T.close(); } catch (e) { } try { D.peer && D.peer.destroy(); } catch (e) { }
   E = E.filter(e => !e.duel); const ob = document.getElementById('obj'); if (ob) ob.style.visibility = ''; if (D.back) { travelTo(D.back.x, D.back.y, true); P.hp = maxHp(); P.mp = maxMp(); music(curRegion()); } if (panel && panel.kind === 'duel') renderPanel(); if (msg) toast(msg, 'red'); }
 
 /* ---------- 對局 ---------- */
@@ -51,8 +51,9 @@ function duelMsg(m) { const D = DUEL; if (!D) return;
   if (m.t === 'ping') { D.T.send({ t: 'pong', at: m.at }); return; } if (m.t === 'pong') { D.ping = Date.now() - m.at; return; }
   if (m.t === 'hello') { D.op = m.me; if (D.host) { D.T.send({ t: 'hello', me: duelMe(), mode: D.mode }); D.T.send({ t: 'go', mode: D.mode }); duelBegin(); } else { D.mode = m.mode; } return; }
   if (m.t === 'go') { D.mode = m.mode; duelBegin(); return; }
-  if (m.t === 'st') { D.os = m; if (D.ent) { D.ent.tx = m.x; D.ent.ty = m.y; D.ent.face = m.f; } return; }
+  if (m.t === 'st') { D.os = m; D.recv2 = m.r || 0; if (D.ent) { D.ent.tx = m.x; D.ent.ty = m.y; D.ent.face = m.f; } return; }
   if (m.t === 'hit') { duelTakeHit(m); return; }
+  if (m.t === 'dmg') { D.dealt = (D.dealt || 0) + m.v; if (D.ent) { fxText(D.ent.x + rnd(-10, 10), D.ent.y - 70, String(m.v), CIN, 18); D.ent.flash = .15; } return; }
   if (m.t === 'miss') { if (D.ent) fxText(D.ent.x, D.ent.y - 50, '閃過', ATTR.柔.col, 14); return; }
   if (m.t === 'fx') { if (D.ent) { arcFx(D.ent.x, D.ent.y, m.a, m.k === 'skill' ? 2.2 : 1.3, m.k === 'skill' ? 120 : 80, m.k === 'skill' ? CIN : INK, m.k === 'skill' ? 10 : 6, .2); D.ent.atkT = .25; } return; }
   if (m.t === 'dead') { if (D.host) duelRoundEnd('host'); return; }
@@ -65,7 +66,7 @@ function duelBegin() { const D = DUEL; if (D.phase !== 'connect') return; D.phas
   const e = spawnEnemy('zp_hero', R.x + R.w / 2, R.y + 200, null, { elite: false, noJie: true }); e.duel = true; e.tag = 'duel'; e.def = Object.assign({}, e.def, { ai: 'none', n: D.op.name, res: {} }); e.hp = e.maxHp = 1e9; e.aggro = false; e.tx = e.x; e.ty = e.y; D.ent = e;
   if (D.host) D.nextT = setTimeout(() => duelHostRound(1), 1500); }
 function duelHostRound(n) { const D = DUEL; if (!D) return; D.T.send({ t: 'round', n }); duelRoundStart(n); }
-function duelRoundStart(n) { const D = DUEL; if (!D) return; const R = duelRoom(); D.n = n; D.phase = 'count'; D.t = 3; D.left = DUEL_ROUND;
+function duelRoundStart(n) { const D = DUEL; if (!D) return; const R = duelRoom(); D.n = n; D.phase = 'count'; D.t = 3; D.left = DUEL_ROUND; D.fightAt = Date.now() + 3000; D.endAt = D.fightAt + DUEL_ROUND * 1000;
   D.myMax = D.mode === 'bal' ? DUEL_BAL_HP : maxHp(); D.myHp = D.myMax; P.hp = maxHp(); P.mp = maxMp(); P.x = R.x + R.w / 2; P.y = R.y + R.h / 2 + (D.host ? 110 : -110); P.face = D.host ? -Math.PI / 2 : Math.PI / 2; P.cd = {};
   if (D.ent) { D.ent.x = D.ent.tx = R.x + R.w / 2; D.ent.y = D.ent.ty = R.y + R.h / 2 + (D.host ? -110 : 110); } D.os = null; banner(`第 ${n} 局`, `${D.wins[D.host ? 0 : 1]} : ${D.wins[D.host ? 1 : 0]}`); }
 function duelRoundEnd(loser) { const D = DUEL; if (!D || !D.host || D.phase !== 'fight') return; D.phase = 'end';
@@ -77,24 +78,25 @@ function duelShowResult(m) { const D = DUEL; if (!D) return; D.phase = 'end'; D.
   if (m.over) { D.phase = 'over'; const win = mine > his; S.duel = S.duel || { w: 0, l: 0 }; if (win) { S.duel.w++; addRep(S.karma >= 0 ? { righteous: 5 } : { blood: 5 }); } else S.duel.l++; saveGame();
     later(2.5, () => { say([{ who: 'narr', t: win ? `論劍${mine} : ${his}，你贏了${D.op.name}。${S.karma >= 0 ? '正派聯盟' : '血影教'}聲望 +5。` : `論劍${mine} : ${his}，${D.op.name}技高一籌。` }, { who: 'narr', t: `生涯戰績：${S.duel.w} 勝 ${S.duel.l} 敗` }], () => duelQuit(null)); }); return; }
   if (D.host) D.nextT = setTimeout(() => duelHostRound(D.n + 1), 3000); }
-function duelTakeHit(m) { const D = DUEL; if (!D || D.phase !== 'fight') return;
+function duelClock() { const D = DUEL; if (!D || !(D.phase === 'count' || D.phase === 'fight')) return; const now = Date.now(); if (D.phase === 'count' && now >= D.fightAt) { D.phase = 'fight'; toast('開打！', 'red'); } D.t = Math.max(0, (D.fightAt - now) / 1000); D.left = Math.max(0, (D.endAt - now) / 1000); if (D.phase === 'fight' && D.host && now >= D.endAt) duelRoundEnd(null); }
+function duelTakeHit(m) { const D = DUEL; if (!D) return; D.recv = (D.recv || 0) + 1; duelClock(); if (D.phase !== 'fight') { D.lateHit = D.phase; return; }
   if (P.dodgeT > 0 || P.iframe > 0 || P.invis > 0 || (D.mode === 'all' && Math.random() < dodgeRate())) { D.T.send({ t: 'miss' }); fxText(P.x, P.y - 44, '閃避', ATTR.柔.col, 15); return; }
   const dmg = Math.max(1, Math.round(D.mode === 'bal' ? m.d : m.d * (1 - damageReduce()) * (P.guard > 0 ? .5 : 1)));
-  D.myHp = Math.max(0, D.myHp - dmg); P.hurt = .2; P.iframe = .18; fxText(P.x, P.y - 50, String(dmg), CIN, m.c ? 22 : 16); burst(P.x, P.y - 20, CIN, 4); doShake(m.c ? 5 : 2);
+  D.got = (D.got || 0) + 1; D.T.send({ t: 'dmg', v: dmg }); D.myHp = Math.max(0, D.myHp - dmg); P.hurt = .2; P.iframe = .18; fxText(P.x, P.y - 50, String(dmg), CIN, m.c ? 22 : 16); burst(P.x, P.y - 20, CIN, 4); doShake(m.c ? 5 : 2);
   if (m.a === '寒') P.slowT = Math.max(P.slowT || 0, .8); if (m.a === '毒' && typeof poisonPlayer === 'function') { const h = P.hp; try { poisonPlayer(2, 0); } catch (e) { } P.hp = h; }
   if (D.myHp <= 0) { if (D.host) duelRoundEnd('host'); else D.T.send({ t: 'dead' }); D.phase = 'end'; } }
 function tickDuel(dt) { const D = DUEL; const ob = document.getElementById('obj'); if (ob) ob.style.visibility = D && D.phase !== 'connect' ? 'hidden' : ''; if (!D) return;
   if (D.ent) { const e = D.ent; e.x += (e.tx - e.x) * Math.min(1, dt * 12); e.y += (e.ty - e.y) * Math.min(1, dt * 12); e.hp = 1e9; e.atkT = Math.max(0, (e.atkT || 0) - dt); }
-  if (D.phase === 'count') { D.t -= dt; if (D.t <= 0) { D.phase = 'fight'; toast('開打！', 'red'); } }
-  if (D.phase === 'fight' || D.phase === 'count') { if (D.phase === 'fight') { D.left -= dt; if (D.left <= 0 && D.host) duelRoundEnd(null); } P.hp = Math.max(1, maxHp() * D.myHp / D.myMax); if (D.phase === 'count') { P.dodgeT = 0; } }
-  if (D.T && D.phase !== 'connect') { D.sendT = (D.sendT || 0) - dt; if (D.sendT <= 0) { D.sendT = .05; D.T.send({ t: 'st', x: Math.round(P.x), y: Math.round(P.y), f: +P.face.toFixed(2), p: P.dodgeT > 0 ? 'dodge' : (P.swingT > 0 || P.lock > 0) ? 'atk' : P.moving ? 'run' : 'idle', pct: D.myHp / (D.myMax || 1) }); } }
+  duelClock();
+  if (D.phase === 'fight' || D.phase === 'count') { P.hp = Math.max(1, maxHp() * D.myHp / D.myMax); if (D.phase === 'count') { P.dodgeT = 0; } }
+  if (D.T && D.phase !== 'connect') { D.sendT = (D.sendT || 0) - dt; if (D.sendT <= 0) { D.sendT = .05; D.T.send({ t: 'st', x: Math.round(P.x), y: Math.round(P.y), f: +P.face.toFixed(2), p: P.dodgeT > 0 ? 'dodge' : (P.swingT > 0 || P.lock > 0) ? 'atk' : P.moving ? 'run' : 'idle', pct: D.myHp / (D.myMax || 1), r: D.got || 0 }); } }
   const R = duelRoom(); if (D.phase !== 'connect' && D.back && !(P.x > R.x - 60 && P.x < R.x + R.w + 60 && P.y > R.y - 60 && P.y < R.y + R.h + 60)) duelQuit('你離開了論劍台，算認輸。'); }
 
 /* ---------- 掛鉤：打到對手 → 傳給對方判定；藥不能吃；死不了 ---------- */
 const _hurtEnemyDuel = hurtEnemy; hurtEnemy = function (e, dmg, o) {
-  if (!e || !e.duel) return _hurtEnemyDuel(e, dmg, o); const D = DUEL; if (!D || D.phase !== 'fight') return;
+  if (!e || !e.duel) return _hurtEnemyDuel(e, dmg, o); const D = DUEL; duelClock(); if (!D || D.phase !== 'fight') return;
   const h0 = e.hp; _hurtEnemyDuel(e, dmg, o); let d = h0 - e.hp; e.hp = 1e9; e.dead = false; if (d <= 0) return;
-  if (D.mode === 'bal') d = d * DUEL_BAL_DMG / Math.max(1, wDmg(S.main)); D.T.send({ t: 'hit', d: Math.round(d), a: o && o.attr || null, c: d > dmg * 1.3 }); };
+  if (D.mode === 'bal') d = d * DUEL_BAL_DMG / Math.max(1, wDmg(S.main)); D.sent = (D.sent || 0) + 1; D.T.send({ t: 'hit', d: Math.max(1, Math.round(d)), a: o && o.attr || null, c: d > dmg * 1.3 }); };
 const _potionDuel = potion; potion = function () { if (DUEL) return toast('論劍不能吃藥'); return _potionDuel(); };
 const _playerDownDuel = playerDown; playerDown = function () { if (DUEL) { P.hp = 1; return; } return _playerDownDuel(); };
 const _basicDuel = basicAttack; basicAttack = function () { const c = P.atkT; _basicDuel(); if (DUEL && DUEL.T && P.atkT !== c) DUEL.T.send({ t: 'fx', k: 'atk', a: +P.face.toFixed(2) }); };
@@ -111,7 +113,7 @@ const _drawCh2ScreenDuel = drawCh2Screen; drawCh2Screen = function () { _drawCh2
   const bw = Math.min(300, W * .32), y = 150, bar = (x, pct, name, right) => { g.fillStyle = 'rgba(29,26,23,.6)'; g.fillRect(x - 2, y - 2, bw + 4, 14); g.fillStyle = CIN; const w = bw * clamp(pct, 0, 1); g.fillRect(right ? x + bw - w : x, y, w, 10); g.font = `14px ${FONT}`; g.textAlign = right ? 'right' : 'left'; g.fillStyle = INK; g.fillText(name, right ? x + bw : x, y - 6); };
   bar(W / 2 - bw - 40, D.myHp / (D.myMax || 1), `${S.name}　${D.wins[D.host ? 0 : 1]} 勝`, false); bar(W / 2 + 40, D.os ? D.os.pct : 1, `${D.wins[D.host ? 1 : 0]} 勝　${D.op.name}`, true);
   g.font = `bold 22px ${FONT}`; g.textAlign = 'center'; g.fillStyle = D.phase === 'count' ? CIN : INK; g.fillText(D.phase === 'count' ? String(Math.ceil(D.t)) : D.phase === 'fight' ? String(Math.max(0, Math.ceil(D.left))) : '—', W / 2, y + 10);
-  g.font = `12px ${FONT}`; g.fillStyle = D.ping > 200 ? CIN : '#6a645a'; g.fillText(`${D.mode === 'bal' ? '平衡擂台' : '無限制擂台'}・延遲 ${D.ping || '—'} ms${D.ping > 200 ? '（延遲偏高）' : ''}`, W / 2, y + 30); };
+  g.font = `12px ${FONT}`; g.fillStyle = D.ping > 200 ? CIN : '#6a645a'; g.fillText(`${D.mode === 'bal' ? '平衡擂台' : '無限制擂台'}・延遲 ${D.ping || '—'} ms${D.ping > 200 ? '（延遲偏高）' : ''}`, W / 2, y + 30); g.fillStyle = '#8a8278'; g.fillText(`出手命中 ${D.sent || 0}・對方挨打 ${D.recv2 || 0}・你挨打 ${D.got || 0}/${D.recv || 0}`, W / 2, y + 46); };
 
 /* ---------- 面板（從練武場進入） ---------- */
 const _trainPanelDuel = PANELS.train; PANELS.train = d => (S.bld.train ? `<div class="sub">論劍（連線對戰）</div>` + item('即時 1 對 1 論劍', S.duel ? `${S.duel.w} 勝 ${S.duel.l} 敗` : '', '三局兩勝，每局 90 秒；不能吃藥。贏家在善惡值較近的陣營得少量聲望。', '', btn('x4:open', '前往論劍台')) : '') + _trainPanelDuel(d);
