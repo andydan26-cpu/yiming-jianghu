@@ -1,0 +1,1 @@
+{"name": "一命江湖", "short_name": "一命江湖", "start_url": ".", "display": "fullscreen", "orientation": "landscape", "background_color": "#ebe1ca", "theme_color": "#1d1a17", "icons": [{"src": "img/icon192.png", "sizes": "192x192", "type": "image/png"}, {"src": "img/icon512.png", "sizes": "512x512", "type": "image/png"}]}
