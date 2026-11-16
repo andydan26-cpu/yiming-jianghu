@@ -191,7 +191,7 @@ function pay(c) { for (const k in c) { if (k === 'rare' || k === 'spec') { let n
 function costStr(c) { return Object.keys(c).map(k => { const n = k === 'rare' ? '稀有礦材' : k === 'spec' ? '特產藥材' : RES[k].n; const have = k === 'rare' ? RARE_ORES.reduce((a, r) => a + S.res[r], 0) : k === 'spec' ? SPECIALTY.reduce((a, r) => a + S.res[r], 0) : S.res[k]; return `<span class="${have >= c[k] ? '' : 'lack'}">${n} ${c[k].toLocaleString()}</span>`; }).join('　'); }
 
 /* ---------- 存檔 ---------- */
-function snapshot() { S.px = P.x; S.py = P.y; S.time = Date.now(); S.fog = fogString(); return JSON.stringify(S); }
+function snapshot() { const db = typeof DUEL !== 'undefined' && DUEL && DUEL.back; S.px = db ? db.x : P.x; S.py = db ? db.y : P.y; S.time = Date.now(); S.fog = fogString(); return JSON.stringify(S); }
 // 只存真正在玩的角色（標題畫面看英雄榜時的空殼 S 不能蓋掉存檔）；每 5 分鐘另存一份備份
 const validSave = s => !!(s && s.origin && s.gen && s.res && s.books);
 let lastBak = 0;

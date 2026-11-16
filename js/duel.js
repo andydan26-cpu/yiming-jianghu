@@ -44,7 +44,7 @@ function duelBind() { const T = DUEL.T; T.onmsg = duelMsg; T.onclose = () => { i
 function duelMe() { return { name: S.name, origin: S.origin, gender: S.gender, hair: S.hair || 0, hairCol: S.hairCol, clothCol: S.clothCol, main: S.main, realm: realmOf(power()), karma: S.karma, mature: !!S.ch2, v: VERSION }; }
 function duelHello() { DUEL.T.send({ t: 'hello', me: duelMe(), mode: DUEL.mode }); }
 function duelQuit(msg) { const D = DUEL; if (!D) return; DUEL = null; clearInterval(D.pingT); clearInterval(D.clockT); clearTimeout(D.lobbyT); clearTimeout(D.nextT); try { D.T && D.T.send({ t: 'bye' }); D.T && D.T.close(); } catch (e) { } try { D.peer && D.peer.destroy(); } catch (e) { }
-  E = E.filter(e => !e.duel); const ob = document.getElementById('obj'); if (ob) ob.style.visibility = ''; if (D.back) { travelTo(D.back.x, D.back.y, true); P.hp = maxHp(); P.mp = maxMp(); music(curRegion()); } if (panel && panel.kind === 'duel') renderPanel(); if (msg) toast(msg, 'red'); }
+  duelQuitBtn(false); E = E.filter(e => !e.duel); const ob = document.getElementById('obj'); if (ob) ob.style.visibility = ''; if (D.back) { travelTo(D.back.x, D.back.y, true); delete S.duelBack; saveGame(); P.hp = maxHp(); P.mp = maxMp(); music(curRegion()); } if (panel && panel.kind === 'duel') renderPanel(); if (msg) toast(msg, 'red'); }
 
 /* ---------- 對局 ---------- */
 function duelMsg(m) { const D = DUEL; if (!D) return;
@@ -60,7 +60,7 @@ function duelMsg(m) { const D = DUEL; if (!D) return;
   if (m.t === 'round') { duelRoundStart(m.n); return; }
   if (m.t === 'result') { duelShowResult(m); return; }
 }
-function duelBegin() { const D = DUEL; if (D.phase !== 'connect') return; D.phase = 'ready'; D.wins = [0, 0]; D.back = { x: P.x, y: P.y }; D.n = 0; closePanel();
+function duelBegin() { const D = DUEL; if (D.phase !== 'connect') return; D.phase = 'ready'; D.wins = [0, 0]; D.back = { x: P.x, y: P.y }; S.duelBack = D.back; D.n = 0; closePanel(); duelQuitBtn(true);
   banner('論劍', `${D.mode === 'bal' ? '平衡擂台' : '無限制擂台'}　對手：${D.op.name}（${ORIGINS[D.op.origin].n}・${D.op.realm}）`); music('boss');
   const R = duelRoom(); travelTo(R.x + R.w / 2, R.y + R.h / 2, true);
   const e = spawnEnemy('zp_hero', R.x + R.w / 2, R.y + 200, null, { elite: false, noJie: true }); e.duel = true; e.tag = 'duel'; e.def = Object.assign({}, e.def, { ai: 'none', n: D.op.name, res: {} }); e.hp = e.maxHp = 1e9; e.aggro = false; e.tx = e.x; e.ty = e.y; D.ent = e;
@@ -131,3 +131,10 @@ function duelAct(x, y) {
   if (x === 'cancel') { duelQuit('已取消'); return; }
   if (x === 'host') duelStart('host'); if (x === 'rand') duelStart('rand');
   if (x === 'join') { const c = (document.getElementById('duel-code') || {}).value || ''; if (!/^\d{4}$/.test(c)) return toast('請輸入四位數房號'); duelStart('join', c); } }
+
+/* 對局中的「退出論劍」按鈕：按下算認輸，直接回到進場前的位置 */
+function duelQuitBtn(on) { let b = document.getElementById('duel-quit');
+  if (!b) { b = document.createElement('button'); b.id = 'duel-quit'; b.textContent = '退出論劍'; b.style.cssText = 'position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);z-index:60;padding:6px 14px;font:inherit;font-size:14px;background:#f3ead8;color:#7a1f1a;border:2px solid #7a1f1a;border-radius:6px;cursor:pointer';
+    b.onclick = e => { e.stopPropagation(); if (!DUEL) return duelQuitBtn(false); if (DUEL.phase === 'over' || confirm('退出論劍算認輸，確定嗎？')) { if (DUEL.phase !== 'over') { S.duel = S.duel || { w: 0, l: 0 }; S.duel.l++; } duelQuit('你退出了論劍。'); } };
+    document.body.appendChild(b); }
+  b.hidden = !on; b.style.display = on ? '' : 'none'; }

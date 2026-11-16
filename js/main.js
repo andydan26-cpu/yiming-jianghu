@@ -183,7 +183,7 @@ let saveT = 10, lastRegion = null, arenaAskT = 0;
 function startGame(s, fresh) {
   if (!s) { toast('存檔讀取失敗', 'red'); return; }
   S = s; S.dead = false; refreshStats(); fogLoad(S.fog); if (!NODES_R.length) genResources();
-  P.x = S.px || 4300; P.y = S.py || 3150 + OY; P.hp = maxHp(); P.mp = maxMp(); P.dead = false; E = []; PR = []; FX = []; TIMERS = [];
+  P.x = S.px || 4300; P.y = S.py || 3150 + OY; { const R = ROOMS.find(r => r.id === 'duel_room'); if (R && P.x > R.x - 80 && P.x < R.x + R.w + 80 && P.y > R.y - 80 && P.y < R.y + R.h + 80) { P.x = S.duelBack ? S.duelBack.x : PLACES.train.x; P.y = S.duelBack ? S.duelBack.y : PLACES.train.y + 60; } } P.hp = maxHp(); P.mp = maxMp(); P.dead = false; E = []; PR = []; FX = []; TIMERS = [];
   $('title').hidden = true; $('create').hidden = true; $('hud').hidden = false; running = true; lastRegion = null;
   const r = claimDaily(); if (r) toast(`每日簽到第 ${S.daily.streak} 天：${Object.keys(r).filter(k => RES[k]).map(k => RES[k].n + ' ' + r[k]).join('、')}`, 'red');
   if (fresh) { banner('青崖山', `第 ${S.gen} 代・${ORIGINS[S.origin].n}`); later(1.2, () => questTalk('master')); }
